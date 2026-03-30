@@ -1,18 +1,6 @@
 
 
-## Soundworks wizard
 
-The soundworks wizard is an interactive command line tool that gives you access to a bunch of high-level routines, such as:
-
-- Create and configure new clients
-- Install/uninstall plugins and related libraries
-- Find some documentation
-- Create environment config files
-- etc.
-
-```bash
-npx soundworks
-```
 
 ## Available npm scripts
 

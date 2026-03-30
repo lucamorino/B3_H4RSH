@@ -1,21 +1,11 @@
-# `step-sequencer`
 
-Thanks for using soundworks!
-
-## Links / Resources
-
-- [General Documentation / Tutorials](https://soundworks.dev/)
-- [API](https://soundworks.dev/api)
-- [Examples](https://github.com/collective-soundworks/soundworks-examples)
-- [Issue Tracker](https://github.com/collective-soundworks/soundworks/issues)
-- [Working with Max/MSP](https://github.com/collective-soundworks/soundworks-max)
 
 ## Soundworks wizard
 
-The soundworks wizard is a interactive command line tool that gives you access to a bunch of high-level routines, such as:
+The soundworks wizard is an interactive command line tool that gives you access to a bunch of high-level routines, such as:
 
 - Create and configure new clients
-- Install / uninstall plugins and related libraries
+- Install/uninstall plugins and related libraries
 - Find some documentation
 - Create environment config files
 - etc.
@@ -42,7 +32,7 @@ Launch the server without building the application. Basically a shortcut for `no
 
 Launch the `[name]` client and restart when the sources are updated. 
 
-For example, if you are developing an application with a node client, you should run the `dev` script (to build the sources and start the server) in one terminal:
+For example, if you are developing an application with a Node client, you should run the `dev` script (to build the sources and start the server) in one terminal:
 
 ```bash
 npm run dev
@@ -64,7 +54,7 @@ If you need to support older browsers, you can configure the build in the `.swcr
 
 ### `ENV`
 
-Define which environment config file should be used to run the application. Environment config files are located in the `/config` directory, are prefixed with `env-`. 
+Define which environment config file should be used to run the application. Environment config files are located in the `/config` directory and are prefixed with `env-`. 
 
 For example, given the following config files:
 
@@ -74,7 +64,7 @@ For example, given the following config files:
 │  └─ env-prod.json   
 ```
 
-To start the server the `/config/env-prod.js` configuration file, you should run:
+To start the server, the `/config/env-prod.js` configuration file, you should run:
 
 ```bash
 ENV=prod npm run start
@@ -86,7 +76,7 @@ If no `env` file is found, the application will generate a default config suitab
 
 Override the port defined in the config file. 
 
-For example, to launch the server on port `3000` whatever the `port` value defined in the default configuration file, you should run:
+For example, to launch the server on port `3000`, whatever the `port` value defined in the default configuration file, you should run:
 
 ```bash
 PORT=3000 npm run start
@@ -94,11 +84,11 @@ PORT=3000 npm run start
 
 ## Emulating clients
 
-In development it can be convenient to emulate several clients in the same browser window or same terminal
+In development, it can be convenient to emulate several clients in the same browser window or the same terminal
 
 ### Browsers clients
 
-To emulate several browser clients in the same window, just append the query parameter `?emulate=[num_clients]` to the URL. For example to launch 10 clients side by side in the same window, you should run:
+To emulate several browser clients in the same window, just append the query parameter `?emulate=[num_clients]` to the URL. For example, to launch 10 clients side by side in the same window, you should run:
 
 ```
 http://127.0.0.1:8000?emulate=10
@@ -106,7 +96,7 @@ http://127.0.0.1:8000?emulate=10
 
 ### Node clients
 
-To emulate several node clients in the same terminal, you can use the `EMULATE=[num_clients]` environment variable. For example to launch 10 clients in parallel from the same terminal, you should run:
+To emulate several node clients in the same terminal, you can use the `EMULATE=[num_clients]` environment variable. For example, to launch 10 clients in parallel from the same terminal, you should run:
 
 ```bash
 EMULATE=10 npm run watch thing

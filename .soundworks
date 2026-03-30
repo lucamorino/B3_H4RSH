@@ -1,0 +1,7 @@
+{
+  "name": "B3-H4RSH",
+  "eslint": true,
+  "language": "js",
+  "configFormat": "yaml",
+  "createVersion": "5.0.1"
+}

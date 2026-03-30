@@ -1,0 +1,8 @@
+name: B3-H4RSH
+author: ""
+clients:
+  player:
+    runtime: browser
+    default: true
+  max:
+    runtime: node

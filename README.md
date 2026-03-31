@@ -1,3 +1,34 @@
+# `B3-H4RSH`
+
+Welcome to _B3-H4RSH_, a noise-based networked music system for mobile devices. 
+
+The web application for smartphone browsers on a co-located network interconnects participants’ devices, employing competitive multiplayer mechanics to
+structure interdependencies among players and shape the music-making act within a noise-music paradigm. By influencing and responding to one another’s actions, participants collectively diffuse sound throughout the space from their smartphones while competing to achieve the “harshest” sonic outcome – and win.
+
+The sound engine is developed in RNBO (https://rnbo.cycling74.com/).
+The web architecture is developed in JavaScript and built on **soundworks**, an “open-source creative coding framework for distributed applications based on web technologies”.
+
+## Links / Resources
+
+- [General Documentation / Tutorials](https://soundworks.dev/)
+- [API](https://soundworks.dev/api)
+- [Examples](https://github.com/collective-soundworks/soundworks-examples)
+- [Issue Tracker](https://github.com/collective-soundworks/soundworks/issues)
+- [Working with Max/MSP](https://github.com/collective-soundworks/soundworks-max)
+
+## Soundworks wizard
+
+The soundworks wizard is a interactive command line tool that gives you access to a bunch of high-level routines, such as:
+
+- Create and configure new clients
+- Install / uninstall plugins and related libraries
+- Find some documentation
+- Create environment config files
+- etc.
+
+```bash
+npx soundworks
+```
 
 
 

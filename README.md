@@ -6,6 +6,7 @@ The web application for smartphone browsers on a co-located network interconnect
 structure interdependencies among players and shape the music-making act within a noise-music paradigm. By influencing and responding to one another’s actions, participants collectively diffuse sound throughout the space from their smartphones while competing to achieve the “harshest” sonic outcome – and win.
 
 The sound engine is developed in RNBO (https://rnbo.cycling74.com/).
+
 The web architecture is developed in JavaScript and built on **soundworks**, an “open-source creative coding framework for distributed applications based on web technologies”.
 
 ## Links / Resources

@@ -53,3 +53,13 @@ for additional information
 
 B) General Public License Version 3 (GPLv3)
 Details of the GPLv3 license can be found at: https://www.gnu.org/licenses/gpl-3.0.html
+
+
+Sharing Apple binaries of any kind will require setting up an Apple developer program membership and codesigning
+the binaries with your certificate.  Otherwise, they will not be able to run without the end user overriding Apple
+security protocols.
+
+For more information visit the following links:
+https://developer.apple.com/programs/enroll/
+https://developer.apple.com/library/archive/documentation/Security/Conceptual/CodeSigningGuide/Procedures/Procedures.html
+https://developer.apple.com/support/certificates/

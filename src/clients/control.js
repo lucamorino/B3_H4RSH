@@ -46,5 +46,11 @@ export default {
       default: 1,
       min: 0,
       max: 100,
+    },
+    collision: {
+      type: 'float',
+      default: 0,
+      min: 0,
+      max: 1,
     }
-    };
+  };

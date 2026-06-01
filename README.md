@@ -1,13 +1,6 @@
-# `B3-H4RSH`
+# `B3-MAX`
 
-Welcome to _B3-H4RSH_, a noise-based networked music system for mobile devices. 
-
-The web application for smartphone browsers on a co-located network interconnects participants’ devices, employing competitive multiplayer mechanics to
-structure interdependencies among players and shape the music-making act within a noise-music paradigm. By influencing and responding to one another’s actions, participants collectively diffuse sound throughout the space from their smartphones while competing to achieve the “harshest” sonic outcome – and win.
-
-The sound engine is developed in RNBO (https://rnbo.cycling74.com/).
-
-The web architecture is developed in JavaScript and built on **soundworks**, an “open-source creative coding framework for distributed applications based on web technologies”.
+Thanks for using soundworks!
 
 ## Links / Resources
 
@@ -31,9 +24,6 @@ The soundworks wizard is a interactive command line tool that gives you access t
 npx soundworks
 ```
 
-
-
-
 ## Available npm scripts
 
 ### `npm run dev`
@@ -52,7 +42,7 @@ Launch the server without building the application. Basically a shortcut for `no
 
 Launch the `[name]` client and restart when the sources are updated. 
 
-For example, if you are developing an application with a Node client, you should run the `dev` script (to build the sources and start the server) in one terminal:
+For example, if you are developing an application with a node client, you should run the `dev` script (to build the sources and start the server) in one terminal:
 
 ```bash
 npm run dev
@@ -74,7 +64,7 @@ If you need to support older browsers, you can configure the build in the `.swcr
 
 ### `ENV`
 
-Define which environment config file should be used to run the application. Environment config files are located in the `/config` directory and are prefixed with `env-`. 
+Define which environment config file should be used to run the application. Environment config files are located in the `/config` directory, are prefixed with `env-`. 
 
 For example, given the following config files:
 
@@ -84,7 +74,7 @@ For example, given the following config files:
 │  └─ env-prod.json   
 ```
 
-To start the server, the `/config/env-prod.js` configuration file, you should run:
+To start the server the `/config/env-prod.js` configuration file, you should run:
 
 ```bash
 ENV=prod npm run start
@@ -96,7 +86,7 @@ If no `env` file is found, the application will generate a default config suitab
 
 Override the port defined in the config file. 
 
-For example, to launch the server on port `3000`, whatever the `port` value defined in the default configuration file, you should run:
+For example, to launch the server on port `3000` whatever the `port` value defined in the default configuration file, you should run:
 
 ```bash
 PORT=3000 npm run start
@@ -104,11 +94,11 @@ PORT=3000 npm run start
 
 ## Emulating clients
 
-In development, it can be convenient to emulate several clients in the same browser window or the same terminal
+In development it can be convenient to emulate several clients in the same browser window or same terminal
 
 ### Browsers clients
 
-To emulate several browser clients in the same window, just append the query parameter `?emulate=[num_clients]` to the URL. For example, to launch 10 clients side by side in the same window, you should run:
+To emulate several browser clients in the same window, just append the query parameter `?emulate=[num_clients]` to the URL. For example to launch 10 clients side by side in the same window, you should run:
 
 ```
 http://127.0.0.1:8000?emulate=10
@@ -116,7 +106,7 @@ http://127.0.0.1:8000?emulate=10
 
 ### Node clients
 
-To emulate several node clients in the same terminal, you can use the `EMULATE=[num_clients]` environment variable. For example, to launch 10 clients in parallel from the same terminal, you should run:
+To emulate several node clients in the same terminal, you can use the `EMULATE=[num_clients]` environment variable. For example to launch 10 clients in parallel from the same terminal, you should run:
 
 ```bash
 EMULATE=10 npm run watch thing

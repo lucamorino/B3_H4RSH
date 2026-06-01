@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!--If you edit this file, please place it in a safe place since future exports will overwrite this automatically generated reference file.-->
+<c74object name="b3_h4rsh_icmc~">
+<metadatalist>
+<metadata name="tag">audio</metadata>
+</metadatalist>
+<methodlist>
+<method name="message"><digest>message input</digest><description>message input</description></method>
+<method name="style"><digest>message input</digest><description>message input</description></method>
+<method name="penalty"><digest>message input</digest><description>message input</description></method>
+<method name="LFO"><digest>message input</digest><description>message input</description></method>
+<method name="map"><digest>message input</digest><description>message input</description></method>
+<method name="touch"><digest>message input</digest><description>message input</description></method>
+<method name="goal"><digest>message input</digest><description>message input</description></method>
+<method name="start"><digest>message input</digest><description>message input</description></method>
+</methodlist>
+<attributelist>
+<attribute name="del" get="1" set="1" size="1" type="float64">
+<digest>del</digest>
+</attribute>
+<attribute name="phase" get="1" set="1" size="1" type="float64">
+<digest>phase</digest>
+</attribute>
+<attribute name="bp" get="1" set="1" size="1" type="float64">
+<digest>bp</digest>
+</attribute>
+<attribute name="fb_trim" get="1" set="1" size="1" type="float64">
+<digest>fb_trim</digest>
+</attribute>
+<attribute name="fb_gain" get="1" set="1" size="1" type="float64">
+<digest>fb_gain</digest>
+</attribute>
+<attribute name="hrsh_threshold" get="1" set="1" size="1" type="float64">
+<digest>hrsh_threshold</digest>
+</attribute>
+<attribute name="samples.1" get="1" set="1" size="1" type="symbol">
+<digest>Map buffer by name</digest>
+<description>The value of this attribute indicates the max buffer that this object will use for its internal buffer named "samples.1"</description>
+</attribute>
+<attribute name="samples.2" get="1" set="1" size="1" type="symbol">
+<digest>Map buffer by name</digest>
+<description>The value of this attribute indicates the max buffer that this object will use for its internal buffer named "samples.2"</description>
+</attribute>
+<attribute name="samples.3" get="1" set="1" size="1" type="symbol">
+<digest>Map buffer by name</digest>
+<description>The value of this attribute indicates the max buffer that this object will use for its internal buffer named "samples.3"</description>
+</attribute>
+<attribute name="samples.4" get="1" set="1" size="1" type="symbol">
+<digest>Map buffer by name</digest>
+<description>The value of this attribute indicates the max buffer that this object will use for its internal buffer named "samples.4"</description>
+</attribute>
+<attribute name="samples.5" get="1" set="1" size="1" type="symbol">
+<digest>Map buffer by name</digest>
+<description>The value of this attribute indicates the max buffer that this object will use for its internal buffer named "samples.5"</description>
+</attribute>
+<attribute name="samples.6" get="1" set="1" size="1" type="symbol">
+<digest>Map buffer by name</digest>
+<description>The value of this attribute indicates the max buffer that this object will use for its internal buffer named "samples.6"</description>
+</attribute>
+<attribute name="samples.7" get="1" set="1" size="1" type="symbol">
+<digest>Map buffer by name</digest>
+<description>The value of this attribute indicates the max buffer that this object will use for its internal buffer named "samples.7"</description>
+</attribute>
+<attribute name="samples.8" get="1" set="1" size="1" type="symbol">
+<digest>Map buffer by name</digest>
+<description>The value of this attribute indicates the max buffer that this object will use for its internal buffer named "samples.8"</description>
+</attribute>
+<attribute name="samples.9" get="1" set="1" size="1" type="symbol">
+<digest>Map buffer by name</digest>
+<description>The value of this attribute indicates the max buffer that this object will use for its internal buffer named "samples.9"</description>
+</attribute>
+<attribute name="samples.10" get="1" set="1" size="1" type="symbol">
+<digest>Map buffer by name</digest>
+<description>The value of this attribute indicates the max buffer that this object will use for its internal buffer named "samples.10"</description>
+</attribute>
+</attributelist>
+</c74object>

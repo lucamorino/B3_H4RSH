@@ -174,6 +174,9 @@ async function main($container) {
       return;
   }
 
+  let presets = patcher.presets || [];
+  console.log(`Loaded patcher with ${presets.length} presets: `, presets.map(p => p.name));
+
   let device;
   console.log("Attempting to create RNBO device...");
   console.log("audioContext:", audioContext);
@@ -266,9 +269,13 @@ async function main($container) {
   }
 
   // initial goal message
-  const goal = user.get('goal');
+  const goal = global.get('goal');
   console.log('Initial goal:', goal);
   sendMessageToInport(device, 'goal', goal);
+
+  // initial preset load
+  const initialPreset = user.get('preset') || 0;
+  loadPresetAtIndex(device, presets, initialPreset);
 
   // Penalty counter state
   let penaltyCounter = 10.0;
@@ -283,7 +290,7 @@ async function main($container) {
     if (fill) fill.style.width = `${pct}%`;
   }
 
-  function startPenaltyCounter() {
+  /* function startPenaltyCounter() {
     if (penaltyInterval) return; // already running
     // ensure display shows current counter
     updatePenaltyDisplay();
@@ -309,16 +316,16 @@ async function main($container) {
       penaltyCounter = 10.0;
       updatePenaltyDisplay();
     }
-  }
+  } */
 
   // Listen for messages from RNBO device
   device.messageEvent.subscribe((ev) => {
-    if (ev.tag === "out2") {
+    if (ev.tag === "out5") {
       const zone = ev.payload;
       console.log(`Received message ${ev.tag}: ${ev.payload}`);
       user.set({zone: zone});// store in user state
     }
-    if (ev.tag === "out3") {
+    if (ev.tag === "out4") {
       const style = ev.payload;
       console.log('Style received:', style);
       user.set({style: style});
@@ -326,12 +333,13 @@ async function main($container) {
       control.set({phase: style[1]});
       control.set({bp: style[2]});
     }
-    if (ev.tag === "out4") {
+    if (ev.tag === "out2") {
       const harshness = ev.payload; // first value in the message
-      const penalty = global.get('penalty');
+      //const penalty = global.get('penalty');
       console.log(`Received message ${ev.tag}: ${harshness}`);
+      applyBackgroundMode(harshness, 0);
       user.set({harsh: harshness});// store in user state
-      if (harshness > 0) {
+      /* if (harshness > 0) {
         const countPenalty = penalty + 1;
         console.log('Increasing penalty to', countPenalty);
         global.set({penalty: countPenalty});
@@ -344,11 +352,27 @@ async function main($container) {
         const countPenalty = 0;
         global.set({penalty: countPenalty});
         //applyBackgroundMode(harshness, countPenalty);
-      }
+      } */
     }
+    if (ev.tag === "out3") {
+      const lifePoints = ev.payload; // first value in the message
+      penaltyCounter = lifePoints;
+      updatePenaltyDisplay();
+      if (lifePoints <= 0) {
+        user.set({ life: lifePoints });
+        console.log('you loose :(');
+        sendMessageToInport(device, 'running', 0);
+        setGameoverOverlay(true);
+      }
+    } 
   });
 
   global.onUpdate(updates => {
+    if ('goal' in updates) {
+      const newGoal = updates['goal'];
+      console.log('Goal updated:', newGoal);
+      sendMessageToInport(device, 'goal', newGoal);
+    }
     if ('running' in updates) {
       const isRunning = updates['running'];
       const enterOverlay = document.getElementById("enter-overlay");
@@ -356,30 +380,16 @@ async function main($container) {
       const startTime = sync.getLocalTime() + 0.5; // 1 second in the future
 
       if (isRunning) {
-        user.set({ life: true });
+        user.set({ life: 10 });
         console.log('you live!');
         enterOverlay.style.display = "none";
         gameOverOverlay.style.display = "none";
       } else { 
-        stopPenaltyCounter(true);
         gameOverOverlay.style.display = "flex";
       }
       console.log('Running state updated:', isRunning);
       playerLoop(startTime, isRunning);
-      //sendMessageToInport(device, 'start', isRunning ? [1] : [0]);
-    }
-    if ('penalty' in updates) {
-      const penalty = updates['penalty'];
-      const harshness = user.get('harsh');
-      // start/stop penalty countdown
-      if (penalty > 0 && harshness == 0) {
-        sendMessageToInport(device, 'penalty', penalty);
-        startPenaltyCounter();
-      } else {
-        sendMessageToInport(device, 'penalty', 0);
-        stopPenaltyCounter(false);
-      }
-      applyBackgroundMode(harshness, penalty);
+      sendMessageToInport(device, 'running', isRunning ? [1] : [0]);
     }
     if ('hrsh_threshold' in updates) {
       const param = getParameter(device, "hrsh_threshold");
@@ -389,57 +399,34 @@ async function main($container) {
   }); 
 
   user.onUpdate(updates => {
-    if ('goal' in updates) {
-      const newGoal = updates['goal'];
-      console.log('Goal updated:', newGoal);
-      sendMessageToInport(device, 'goal', newGoal);
-    }
     if ('life' in updates) {
-      const isAlive = updates['life'];
+      const isAlive = updates['life'] > 0;
       setGameoverOverlay(!isAlive);
     }
-    if ('LFO' in updates) {
-      sendMessageToInport(device, 'LFO', updates['LFO']);
-      console.log('Updating LFO to', updates['LFO']);
+    if ('proximity' in updates) {
+      sendMessageToInport(device, 'proximity', updates['proximity']);
+      //console.log('Updating proximity to', updates['proximity']);
     }
-    if ('del_range' in updates) {
-      const param = getParameter(device, "del_range");
-      console.log('Updating del_range to', updates['del_range']);
-      param.value = updates['del_range'];
+    if ('penalty' in updates) {
+      const raw = updates['penalty'];
+      const numeric = Array.isArray(raw) ? Number(raw[0]) : Number(raw);
+      const penalty = Number.isFinite(numeric) && numeric > 0 ? 1 : 0;
+      console.log('Updating penalty to', penalty);
+      sendMessageToInport(device, 'penalty', [penalty]);
+      applyBackgroundMode(0, penalty);
     }
-    if ('del_offset' in updates) {
-      const param = getParameter(device, "del_offset");
-      console.log('Updating del_offset to', updates['del_offset']);
-      param.value = updates['del_offset'];
+    if ('preset' in updates) {
+      const index = updates['preset'];
+      loadPresetAtIndex(device, presets, index);
     }
-    if ('phase_range' in updates) {
-      const param = getParameter(device, "phase_range");
-      console.log('Updating phase_range to', updates['phase_range']);
-    }
-    if ('phase_offset' in updates) {
-      const param = getParameter(device, "phase_offset");
-      console.log('Updating phase_offset to', updates['phase_offset']);
-      param.value = updates['phase_offset'];
-    }
-    if ('bp_range' in updates) {
-      const param = getParameter(device, "bp_range");
-      console.log('Updating bp_range to', updates['bp_range']);
-      param.value = updates['bp_range'];
-    }
-    if ('bp_offset' in updates) {
-      const param = getParameter(device, "bp_offset");
-      console.log('Updating bp_offset to', updates['bp_offset']);
-      param.value = updates['bp_offset'];
-    }
-    if ('fb_gain' in updates) {
-      const param = getParameter(device, "fb_gain");
-      console.log('Updating fb_gain to', updates['fb_gain']);
-      param.value = updates['fb_gain'];
-    }
-    if ('fb_trim' in updates) {
-      const param = getParameter(device, "fb_trim");
-      console.log('Updating fb_trim to', updates['fb_trim']);
-      param.value = updates['fb_trim'];
+  });
+
+  // Trigger preset change on collision message from RNBO
+  control.onUpdate(updates => {
+    if ('collision' in updates && updates['collision'] === 1 && presets.length > 0) {
+      const randIndex = Math.floor(Math.random() * presets.length);
+      loadPresetAtIndex(device, presets, randIndex);
+      user.set({ preset: randIndex });
     }
   });
 
@@ -449,13 +436,11 @@ async function main($container) {
   // -------------------------------------------------------------------
   function renderApp() {
     render(html`
-      <div id="app-root" class="centered-app">
+      <div id="app-root">
 
         <div id="enter-overlay">
             <div id="enter-content">
               <div id="enter-text"></div>
-              <div class="spacer"></div>
-              <div class="spacer"></div>
               <button id="enter-button" type="button"> >>> </button>
             </div>
         </div>
@@ -464,49 +449,24 @@ async function main($container) {
           <div id="gameover-content">G4M3 0V3R</div>
         </div>
 
-        <div class="ui-frame">
-          <section class="panel panel-top">
-            <div class="panel-inner">
-              <div class="oscillo-row">
-                <div id="oscilloscope-container" class="control-frame controls">
-                  <canvas id="oscilloscope" width="320" height="70"></canvas>
-                </div>
-                <div class="lfo-badge">LFO</div>
-              </div>
+        <div id="oscilloscope-container">
+          <canvas id="oscilloscope" width="320" height="70"></canvas>
+        </div>
 
-              <div class="meter-group">
-                <div id="penalty-counter" class="meter-row life-meter">
-                  <div class="meter-label">LIFE</div>
-                  <div class="life-bar">
-                    <div id="life-fill"></div>
-                  </div>
-                  <div class="life-value" id="penalty-counter-value">10.0</div>
-                </div>
+        <div id="penalty-counter">
+          <div class="life-label"> ♥ </div>
+          <div class="life-bar">
+            <div id="life-fill"></div>
+          </div>
+          <div class="life-value" id="penalty-counter-value">10.0</div>
+        </div>
 
-                <div class="meter-row energy-meter">
-                  <div class="meter-label">ENERGY</div>
-                  <div class="energy-bar">
-                    <div class="energy-fill"></div>
-                  </div>
-                  <div class="meter-value" id="energy-value">5.4</div>
-                </div>
-              </div>
-            </div>
-          </section>
+        <div id="xy-pad-container">
+          <canvas id="xy-pad" width="320" height="320"></canvas>
+        </div>
 
-          <section class="panel panel-bottom">
-            <div class="panel-inner">
-              <div class="control-grid">
-                <div id="xy-slider-container" class="control-frame controls slider-frame">
-                  <input id="xy-slider" type="range" min="0" max="100" value="50" />
-                </div>
-
-                <div id="xy-pad-container" class="control-frame controls pad-frame">
-                  <canvas id="xy-pad" width="260" height="260"></canvas>
-                </div>
-              </div>
-            </div>
-          </section>
+        <div id="xy-slider-container">
+          <input id="xy-slider" type="range" min="0" max="100" value="50" />
         </div>
 
       </div>
@@ -519,7 +479,7 @@ async function main($container) {
       if (overlay) overlay.style.display = visible ? 'flex' : 'none';
     };
     setGameoverOverlay(false);
-    setupUI(device, control, user);
+    setupUI(device, control);
     startOscilloscope(analyser);
   }
 
@@ -589,6 +549,22 @@ function sendMessageToInport(device, inportTag, values) {
   );
   device.scheduleEvent(messageEvent);
 }
+function loadPresetAtIndex(device, presets, index) {
+    const presetIndex = Math.floor(Number(index));
+    if (!Number.isFinite(presetIndex) || presetIndex < 0 || presetIndex >= presets.length) {
+      console.warn('Ignoring invalid preset index:', index);
+      return;
+    }
+
+    const preset = presets[presetIndex];
+    if (!preset) {
+      console.warn('Preset not found at index:', presetIndex);
+      return;
+    }
+
+    console.log(`Loading preset ${preset.name}`);
+    device.setPreset(preset.preset);
+}
 
 function startOscilloscope(analyser) {
   if (!analyser || oscilloscopeStarted) return;
@@ -648,7 +624,7 @@ function startOscilloscope(analyser) {
   draw();
 }
 
-function setupUI(device, control, user) {
+function setupUI(device, control) {
     // Get all UI elements we need
     const canvas = document.getElementById('xy-pad');
     const ctx = canvas.getContext('2d');
@@ -672,7 +648,7 @@ function setupUI(device, control, user) {
         if (sliderValue) sliderValue.textContent = String(v);
 
         // read latest pad coords (mapped values) from device._lastTouch
-        const last = (device && device._lastTouch) ? device._lastTouch : [86, 86];
+        const last = (device && device._lastTouch) ? device._lastTouch : Math.random()*100;//[86, 86];
         const touchX = last[0];
         const touchY = last[1];
         updateControlPosition(touchX, touchY, v);
@@ -688,18 +664,34 @@ function setupUI(device, control, user) {
     }
 
     // Setup pad
-    const padSize = canvas.width;
+    let padSize = canvas.width;
     const dotRadius = 10;
-    let dotX = padSize / 2 + Math.random() * 200 - 100;
-    let dotY = padSize / 2 + Math.random() * 200 - 100;
+    let dotX = padSize / 2;
+    let dotY = padSize / 2;
     let dragging = false;
-    let startActive = false;
-    let targetPoint = Array.isArray(user?.get?.('goal')) ? user.get('goal') : [50, 50];
-    let showTarget = true;
+    let startActive = false;    
 
     // --- Pad: Use pointer events for multitouch ---
     // padSize, dotRadius, dotX, dotY, dragging now declared only once (see pointer events section below)
     let activePointerId = null;
+
+    function resizePad() {
+      const container = canvas.parentElement;
+      const rect = container.getBoundingClientRect();
+      const cs = getComputedStyle(container);
+      const innerW = rect.width
+        - parseFloat(cs.paddingLeft || '0')
+        - parseFloat(cs.paddingRight || '0');
+      const size = Math.max(150, Math.floor(innerW || window.innerWidth * 0.9));
+      padSize = size;
+      canvas.width = size;
+      canvas.height = size;
+      canvas.style.width = '100%';
+      canvas.style.height = `${size}px`;
+      dotX = Math.max(dotRadius, Math.min(padSize - dotRadius, dotX));
+      dotY = Math.max(dotRadius, Math.min(padSize - dotRadius, dotY));
+      drawPad();
+    }
 
     function getXY(e) {
         let rect = canvas.getBoundingClientRect();
@@ -719,35 +711,8 @@ function setupUI(device, control, user) {
         return { x, y };
     }
 
-    function getTargetCoords() {
-        const gx = Number(targetPoint?.[0] ?? 50);
-        const gy = Number(targetPoint?.[1] ?? 50);
-        const tx = Math.max(0, Math.min(100, gx));
-        const ty = Math.max(0, Math.min(100, gy));
-        return {
-          x: (tx / 100) * padSize,
-          y: (ty / 100) * padSize,
-        };
-    }
-
     function drawPad() {
         ctx.clearRect(0, 0, padSize, padSize);
-        if (showTarget) {
-          const target = getTargetCoords();
-          ctx.save();
-          ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
-          ctx.lineWidth = 2;
-          ctx.beginPath();
-          ctx.arc(target.x, target.y, 8, 0, 2 * Math.PI);
-          ctx.stroke();
-          ctx.beginPath();
-          ctx.moveTo(target.x - 12, target.y);
-          ctx.lineTo(target.x + 12, target.y);
-          ctx.moveTo(target.x, target.y - 12);
-          ctx.lineTo(target.x, target.y + 12);
-          ctx.stroke();
-          ctx.restore();
-        }
         ctx.beginPath();
         ctx.arc(dotX, dotY, dotRadius, 0, 2 * Math.PI);
         ctx.fillStyle = accentColor || '#ff44b4';
@@ -755,6 +720,9 @@ function setupUI(device, control, user) {
         ctx.strokeStyle = '#000';
         ctx.stroke();
     }
+
+    resizePad();
+    window.addEventListener('resize', resizePad);
 
     // Use pointer events for multitouch
     canvas.addEventListener('pointerdown', (e) => {
@@ -769,7 +737,7 @@ function setupUI(device, control, user) {
             let touchY = Math.round((dotY / padSize) * 100);
             device._lastTouch = [touchX, touchY];
             
-            const sliderVal = Number(slider?.value || 50);
+            const sliderVal = Number(slider?.value || Math.random()*100);
             updateControlPosition(touchX, touchY, sliderVal);
             const messageEvent = new RNBO.MessageEvent(
                 RNBO.TimeNow,
@@ -778,12 +746,12 @@ function setupUI(device, control, user) {
             );
             if (touchDebug) touchDebug.textContent = `[${touchX}, ${touchY}, ${sliderVal}]`;
             device.scheduleEvent(messageEvent);
-            if (!startActive) {
+            //if (!startActive) {
               sendMessageToInport(device, 'randomize', [1]);
               sendMessageToInport(device, 'start', [1]);
               if (control) control.set({active: 1});
-              startActive = true;
-        }
+              //startActive = true;
+        //}
       }
     });
 
@@ -824,11 +792,12 @@ function setupUI(device, control, user) {
         if (e.pointerId === activePointerId) {
             dragging = false;
             activePointerId = null;
-            if (startActive) {
+            //if (startActive) {
               sendMessageToInport(device, 'start', [0]);
+              user.set({ harsh: 0 });
               if (control) control.set({active: 0});
-              startActive = false;
-          }
+              //startActive = false;
+          //}
         }
     });
 
@@ -836,22 +805,13 @@ function setupUI(device, control, user) {
         if (e.pointerId === activePointerId) {
             dragging = false;
             activePointerId = null;
-            if (startActive) {
+            //if (startActive) {
               sendMessageToInport(device, 'start', [0]);
               if (control) control.set({active: 0});
-              startActive = false;
-        }
+              //startActive = false;
+        //}
       }
     });
-
-    if (user?.onUpdate) {
-      user.onUpdate(updates => {
-        if ('goal' in updates && Array.isArray(updates.goal)) {
-          targetPoint = updates.goal;
-          drawPad();
-        }
-      });
-    }
 
     drawPad();
 
@@ -911,9 +871,11 @@ function setupUI(device, control, user) {
     };
     if (enterButton && enterText) {
       renderEnterText(enterTextIndex);
+      const enterOverlay = document.getElementById('enter-overlay');
       enterButton.onclick = () => {
-        enterTextIndex = Math.min(enterTextIndex + 1, enterTexts.length - 1);
-        renderEnterText(enterTextIndex);
+        //enterTextIndex = Math.min(enterTextIndex + 1, enterTexts.length - 1);
+        //renderEnterText(enterTextIndex);
+        enterOverlay.style.display = "none";
       };
     }
 }

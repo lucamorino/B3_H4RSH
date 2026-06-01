@@ -1,23 +1,16 @@
-# Logs
-logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
+# build files and dependencies
+/node_modules
+.build
+.data
 
-.build/
-node_modules/
+# ignore all environment config files except default
+/config/env-*
+!/config/env-default.yaml
 
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
+# junk files
+package-lock.json
 .DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
-.vercel
+Thumbs.db
+
+# TLS certificates
+/**/*.pem

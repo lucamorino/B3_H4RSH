@@ -11,7 +11,7 @@ export default {
       min: 0,
       max: 1,
     },
-    del: {
+    /* del: {
       type: 'float',
       default: 86,
       min: 1,
@@ -28,7 +28,7 @@ export default {
       default: 100,
       min: 1,
       max: 2000,
-    },
+    }, */
     X: {
       type: 'float',
       default: 1,
@@ -41,11 +41,11 @@ export default {
       min: 0,
       max: 100,
     },
-    Z: {
+    sharpness: {
       type: 'float',
       default: 1,
-      min: 0,
-      max: 100,
+      min: 0.1,
+      max: 3.99
     },
     collision: {
       type: 'float',

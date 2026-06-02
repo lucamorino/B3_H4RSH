@@ -211,5 +211,8 @@ Max.addHandler('preset', (userId, index) => {
 Max.addHandler('collision_distance', (distance) => global.set({ collision_distance: distance }));
 Max.addHandler('proximity_offset', (offset) => global.set({ proximity_offset: offset }));
 Max.addHandler('periphery_offset', (offset) => global.set({ periphery_offset: offset }));
-Max.addHandler('hrsh_threshold', (threshold) => global.set({ hrsh_threshold: threshold }));
+Max.addHandler('sharp_threshold', (threshold) => global.set({ sharp_threshold: threshold }));
+Max.addHandler('dist_threshold', (threshold) => global.set({ dist_threshold: threshold }));
+Max.addHandler('trial_mode', (mode) => global.set({ trial_mode: Boolean(mode) }));
+
   

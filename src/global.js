@@ -4,18 +4,28 @@ export default {
     type: 'boolean',
     default: false,
   },
+  trial_mode: {
+    type: 'boolean',
+    default: false,
+  },
   syncTriggerTime: {
     type: 'float',
     default: 0,
   },
   goal: {
     type: 'any',
-    default: [30, 30, 30],
+    default: [30, 30, 2],
   },
-  hrsh_threshold: {
+  sharp_threshold: {
     type: 'float',
-    default: 0.575,
+    default: 1.5,
     min: 0.1,
+    max: 3.99,
+  },
+  dist_threshold: {
+    type: 'float',
+    default: 0.08,
+    min: 0.01,
     max: 0.99,
   },
   collision_distance: {

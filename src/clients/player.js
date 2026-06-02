@@ -65,7 +65,7 @@ async function main($container) {
   
   const config = loadConfig();
   const client = new Client(config);
-  const audioContext = new AudioContext();
+  const audioContext = new AudioContext({ latencyHint: 'interactive' });
   console.log(audioContext.sampleRate);
  
   client.pluginManager.register('checkin', pluginCheckin);
@@ -123,7 +123,11 @@ async function main($container) {
   const analyser = audioContext.createAnalyser();
   analyser.fftSize = 1024;
   analyser.smoothingTimeConstant = 0.3;
-  analyser.connect(outputNode)
+
+  const padGain = audioContext.createGain();
+  padGain.gain.value = 0;
+  analyser.connect(padGain);
+  padGain.connect(outputNode);
   const baseColor = '#000000';
 
   const humGain = audioContext.createGain();
@@ -268,14 +272,32 @@ async function main($container) {
     }
   }
 
+  let deviceStartedAt = null;
+  let isActive = false;
+
   // initial goal message
   const goal = global.get('goal');
   console.log('Initial goal:', goal);
   sendMessageToInport(device, 'goal', goal);
+  // Prime RNBO: set a known touch position and start synthesis so feedback
+  // buffers are warm before the first user tap
+  sendMessageToInport(device, 'touch', [50, 50]);
+  sendMessageToInport(device, 'start', [1]);
+
+  const padState = {
+    trialMode: global.get('trial_mode') ?? false,
+    goal,
+  };
+  let redrawPad = () => {};
 
   // initial preset load
   const initialPreset = user.get('preset') || 0;
   loadPresetAtIndex(device, presets, initialPreset);
+  // Presets embed their own dist_threshold/sharp_threshold values — re-apply globals immediately
+  const _initDist = getParameter(device, "dist_threshold");
+  const _initSharp = getParameter(device, "sharp_threshold");
+  if (_initDist) _initDist.value = global.get('dist_threshold');
+  if (_initSharp) _initSharp.value = global.get('sharp_threshold');
 
   // Penalty counter state
   let penaltyCounter = 10.0;
@@ -290,9 +312,8 @@ async function main($container) {
     if (fill) fill.style.width = `${pct}%`;
   }
 
-  /* function startPenaltyCounter() {
-    if (penaltyInterval) return; // already running
-    // ensure display shows current counter
+  function startPenaltyCounter() {
+    if (penaltyInterval) return;
     updatePenaltyDisplay();
     penaltyInterval = setInterval(() => {
       penaltyCounter = Math.max(0, +(penaltyCounter - 0.1).toFixed(1));
@@ -300,9 +321,10 @@ async function main($container) {
       if (penaltyCounter <= 0) {
         clearInterval(penaltyInterval);
         penaltyInterval = null;
-        user.set({ life: false });
+        user.set({ life: 0 });
         console.log('you loose :(');
-        sendMessageToInport(device, 'start', 0);
+        sendMessageToInport(device, 'running', 0);
+        setGameoverOverlay(true);
       }
     }, 200);
   }
@@ -316,11 +338,11 @@ async function main($container) {
       penaltyCounter = 10.0;
       updatePenaltyDisplay();
     }
-  } */
+  }
 
   // Listen for messages from RNBO device
   device.messageEvent.subscribe((ev) => {
-    if (ev.tag === "out5") {
+    /* if (ev.tag === "out5") {
       const zone = ev.payload;
       console.log(`Received message ${ev.tag}: ${ev.payload}`);
       user.set({zone: zone});// store in user state
@@ -332,11 +354,11 @@ async function main($container) {
       control.set({del: style[0]}); // trigger update
       control.set({phase: style[1]});
       control.set({bp: style[2]});
-    }
-    if (ev.tag === "out2") {
-      const harshness = ev.payload; // first value in the message
-      //const penalty = global.get('penalty');
-      console.log(`Received message ${ev.tag}: ${harshness}`);
+    } */
+    if (ev.tag === "out4") {
+      if (!isActive) return;
+      const harshness = ev.payload;
+      if (deviceStartedAt !== null && (performance.now() - deviceStartedAt) < 250) return;
       applyBackgroundMode(harshness, 0);
       user.set({harsh: harshness});// store in user state
       /* if (harshness > 0) {
@@ -354,24 +376,27 @@ async function main($container) {
         //applyBackgroundMode(harshness, countPenalty);
       } */
     }
+    if (ev.tag === "out2") {
+      const sharpness = ev.payload;
+      const el = document.getElementById('sharpness-value');
+      if (el) el.textContent = typeof sharpness === 'number' ? sharpness.toFixed(2) : sharpness;
+    }
     if (ev.tag === "out3") {
-      const lifePoints = ev.payload; // first value in the message
-      penaltyCounter = lifePoints;
-      updatePenaltyDisplay();
-      if (lifePoints <= 0) {
-        user.set({ life: lifePoints });
-        console.log('you loose :(');
-        sendMessageToInport(device, 'running', 0);
-        setGameoverOverlay(true);
-      }
-    } 
+      // loudness — received but not displayed
+    }
   });
 
   global.onUpdate(updates => {
+    if ('trial_mode' in updates) {
+      padState.trialMode = updates['trial_mode'];
+      redrawPad();
+    }
     if ('goal' in updates) {
       const newGoal = updates['goal'];
-      console.log('Goal updated:', newGoal);
+      padState.goal = newGoal;
+      //console.log('Goal updated:', newGoal);
       sendMessageToInport(device, 'goal', newGoal);
+      if (padState.trialMode) redrawPad();
     }
     if ('running' in updates) {
       const isRunning = updates['running'];
@@ -381,20 +406,27 @@ async function main($container) {
 
       if (isRunning) {
         user.set({ life: 10 });
+        stopPenaltyCounter(true);
         console.log('you live!');
         enterOverlay.style.display = "none";
         gameOverOverlay.style.display = "none";
-      } else { 
+      } else {
+        stopPenaltyCounter(false);
         gameOverOverlay.style.display = "flex";
       }
       console.log('Running state updated:', isRunning);
       playerLoop(startTime, isRunning);
       sendMessageToInport(device, 'running', isRunning ? [1] : [0]);
     }
-    if ('hrsh_threshold' in updates) {
-      const param = getParameter(device, "hrsh_threshold");
-      console.log('Updating hrsh_threshold to', updates['hrsh_threshold']);
-      param.value = updates['hrsh_threshold'];
+    if ('sharp_threshold' in updates) {
+      const param = getParameter(device, "sharp_threshold");
+      console.log('Updating sharp_threshold to', updates['sharp_threshold']);
+      param.value = updates['sharp_threshold'];
+    }
+    if ('dist_threshold' in updates) {
+      const param = getParameter(device, "dist_threshold");
+      console.log('Updating dist_threshold to', updates['dist_threshold']);
+      param.value = updates['dist_threshold'];
     }
   }); 
 
@@ -414,10 +446,20 @@ async function main($container) {
       console.log('Updating penalty to', penalty);
       sendMessageToInport(device, 'penalty', [penalty]);
       applyBackgroundMode(0, penalty);
+      if (penalty > 0) {
+        startPenaltyCounter();
+      } else {
+        stopPenaltyCounter(false);
+      }
     }
     if ('preset' in updates) {
       const index = updates['preset'];
       loadPresetAtIndex(device, presets, index);
+      // Re-apply global thresholds overridden by preset values
+      const _distParam = getParameter(device, "dist_threshold");
+      const _sharpParam = getParameter(device, "sharp_threshold");
+      if (_distParam) _distParam.value = global.get('dist_threshold');
+      if (_sharpParam) _sharpParam.value = global.get('sharp_threshold');
     }
   });
 
@@ -426,6 +468,11 @@ async function main($container) {
     if ('collision' in updates && updates['collision'] === 1 && presets.length > 0) {
       const randIndex = Math.floor(Math.random() * presets.length);
       loadPresetAtIndex(device, presets, randIndex);
+      // Re-apply global thresholds overridden by preset values
+      const _distParam = getParameter(device, "dist_threshold");
+      const _sharpParam = getParameter(device, "sharp_threshold");
+      if (_distParam) _distParam.value = global.get('dist_threshold');
+      if (_sharpParam) _sharpParam.value = global.get('sharp_threshold');
       user.set({ preset: randIndex });
     }
   });
@@ -454,6 +501,10 @@ async function main($container) {
         </div>
 
         <div id="penalty-counter">
+          <div id="sharpness-display">
+            <div class="sharpness-label">SHARP</div>
+            <div id="sharpness-value">0.00</div>
+          </div>
           <div class="life-label"> ♥ </div>
           <div class="life-bar">
             <div id="life-fill"></div>
@@ -465,9 +516,6 @@ async function main($container) {
           <canvas id="xy-pad" width="320" height="320"></canvas>
         </div>
 
-        <div id="xy-slider-container">
-          <input id="xy-slider" type="range" min="0" max="100" value="50" />
-        </div>
 
       </div>
     `, $container);
@@ -479,7 +527,10 @@ async function main($container) {
       if (overlay) overlay.style.display = visible ? 'flex' : 'none';
     };
     setGameoverOverlay(false);
-    setupUI(device, control);
+    redrawPad = setupUI(device, control, user, padState, audioContext, padGain,
+      () => { isActive = true; deviceStartedAt = performance.now(); },
+      () => { isActive = false; }
+    ).redraw;
     startOscilloscope(analyser);
   }
 
@@ -624,44 +675,19 @@ function startOscilloscope(analyser) {
   draw();
 }
 
-function setupUI(device, control) {
+function setupUI(device, control, user, padState, audioContext, padGain, onStart, onStop) {
     // Get all UI elements we need
     const canvas = document.getElementById('xy-pad');
     const ctx = canvas.getContext('2d');
-    const slider = document.getElementById('xy-slider');
-    const sliderValue = document.getElementById('xy-slider-value');
     const touchDebug = document.getElementById('touch-debug');
     //const waveButtons = document.querySelectorAll('.wave-btn');
     //const randomizeButton = document.getElementById('randomize-button');
     const accentColor = getComputedStyle(document.documentElement)
       .getPropertyValue('--sw-accent-color').trim() || '#ff44b4';
 
-    const updateControlPosition = (x, y, z) => {
-      if (control) control.set({ X: x, Y: y, Z: z });
+    const updateControlPosition = (x, y) => {
+      if (control) control.set({ X: x, Y: y });
     };
-
-    // --- Multitouch: Use pointer events for pad and slider ---
-    // Setup slider event handling
-    if (slider) {
-      slider.addEventListener('input', (e) => {
-        const v = Number(e.target.value);
-        if (sliderValue) sliderValue.textContent = String(v);
-
-        // read latest pad coords (mapped values) from device._lastTouch
-        const last = (device && device._lastTouch) ? device._lastTouch : Math.random()*100;//[86, 86];
-        const touchX = last[0];
-        const touchY = last[1];
-        updateControlPosition(touchX, touchY, v);
-
-        try {
-          const msg = new RNBO.MessageEvent(RNBO.TimeNow, 'touch', [touchX, touchY, v]);
-          if (touchDebug) touchDebug.textContent = `[${touchX}, ${touchY}, ${v}]`;
-          device.scheduleEvent(msg);
-        } catch (err) {
-          console.debug('Could not schedule touch message with slider value', err);
-        }
-      });
-    }
 
     // Setup pad
     let padSize = canvas.width;
@@ -713,11 +739,23 @@ function setupUI(device, control) {
 
     function drawPad() {
         ctx.clearRect(0, 0, padSize, padSize);
+
+        if (padState && padState.trialMode && padState.goal) {
+          const [gx, gy] = padState.goal;
+          const gPixX = (gx / 100) * padSize;
+          const gPixY = (gy / 100) * padSize;
+          const s = (3 / 100) * padSize;
+          ctx.strokeStyle = accentColor || '#f4f4f4';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(gPixX - s / 2, gPixY - s / 2, s, s);
+        }
+
         ctx.beginPath();
         ctx.arc(dotX, dotY, dotRadius, 0, 2 * Math.PI);
         ctx.fillStyle = accentColor || '#ff44b4';
         ctx.fill();
         ctx.strokeStyle = '#000';
+        ctx.lineWidth = 1;
         ctx.stroke();
     }
 
@@ -725,8 +763,12 @@ function setupUI(device, control) {
     window.addEventListener('resize', resizePad);
 
     // Use pointer events for multitouch
-    canvas.addEventListener('pointerdown', (e) => {
+    canvas.addEventListener('pointerdown', async (e) => {
         if (activePointerId === null) {
+            // Ensure AudioContext is running before sending RNBO messages
+            if (audioContext.state !== 'running') {
+              try { await audioContext.resume(); } catch (err) {}
+            }
             activePointerId = e.pointerId;
             dragging = true;
             let { x, y } = getXY(e);
@@ -736,23 +778,20 @@ function setupUI(device, control) {
             let touchX = Math.round((dotX / padSize) * 100);
             let touchY = Math.round((dotY / padSize) * 100);
             device._lastTouch = [touchX, touchY];
-            
-            const sliderVal = Number(slider?.value || Math.random()*100);
-            updateControlPosition(touchX, touchY, sliderVal);
+            updateControlPosition(touchX, touchY);
             const messageEvent = new RNBO.MessageEvent(
                 RNBO.TimeNow,
                 "touch",
-                [touchX, touchY, sliderVal]
+                [touchX, touchY]
             );
-            if (touchDebug) touchDebug.textContent = `[${touchX}, ${touchY}, ${sliderVal}]`;
+            if (touchDebug) touchDebug.textContent = `[${touchX}, ${touchY}]`;
             device.scheduleEvent(messageEvent);
-            //if (!startActive) {
-              sendMessageToInport(device, 'randomize', [1]);
-              sendMessageToInport(device, 'start', [1]);
-              if (control) control.set({active: 1});
-              //startActive = true;
-        //}
-      }
+            onStart();
+            padGain.gain.cancelScheduledValues(audioContext.currentTime);
+            padGain.gain.setValueAtTime(padGain.gain.value, audioContext.currentTime);
+            padGain.gain.linearRampToValueAtTime(1, audioContext.currentTime + 0.15);
+            if (control) control.set({active: 1});
+        }
     });
 
     // Waveform buttons: toggle active/inactive styling
@@ -774,16 +813,13 @@ function setupUI(device, control) {
             let touchX = Math.round((dotX / padSize) * 100);
             let touchY = Math.round((dotY / padSize) * 100);
             device._lastTouch = [touchX, touchY];
-
-            const sliderVal = Number(slider?.value || 50);
-            updateControlPosition(touchX, touchY, sliderVal);
-            
+            updateControlPosition(touchX, touchY);
             const messageEvent = new RNBO.MessageEvent(
                 RNBO.TimeNow,
                 "touch",
-                [touchX, touchY, sliderVal]
+                [touchX, touchY]
             );
-            if (touchDebug) touchDebug.textContent = `[${touchX}, ${touchY}, ${sliderVal}]`;
+            if (touchDebug) touchDebug.textContent = `[${touchX}, ${touchY}]`;
             device.scheduleEvent(messageEvent);
         }
     });
@@ -792,12 +828,12 @@ function setupUI(device, control) {
         if (e.pointerId === activePointerId) {
             dragging = false;
             activePointerId = null;
-            //if (startActive) {
-              sendMessageToInport(device, 'start', [0]);
-              user.set({ harsh: 0 });
-              if (control) control.set({active: 0});
-              //startActive = false;
-          //}
+            onStop();
+            padGain.gain.cancelScheduledValues(audioContext.currentTime);
+            padGain.gain.setValueAtTime(padGain.gain.value, audioContext.currentTime);
+            padGain.gain.linearRampToValueAtTime(0, audioContext.currentTime + 0.08);
+            user.set({ harsh: 0 });
+            if (control) control.set({active: 0});
         }
     });
 
@@ -805,12 +841,12 @@ function setupUI(device, control) {
         if (e.pointerId === activePointerId) {
             dragging = false;
             activePointerId = null;
-            //if (startActive) {
-              sendMessageToInport(device, 'start', [0]);
-              if (control) control.set({active: 0});
-              //startActive = false;
-        //}
-      }
+            onStop();
+            padGain.gain.cancelScheduledValues(audioContext.currentTime);
+            padGain.gain.setValueAtTime(padGain.gain.value, audioContext.currentTime);
+            padGain.gain.linearRampToValueAtTime(0, audioContext.currentTime + 0.08);
+            if (control) control.set({active: 0});
+        }
     });
 
     drawPad();
@@ -878,6 +914,8 @@ function setupUI(device, control) {
         enterOverlay.style.display = "none";
       };
     }
+
+    return { redraw: drawPad };
 }
 
 // The launcher allows to launch multiple clients in the same browser window

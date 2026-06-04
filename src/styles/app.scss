@@ -33,6 +33,9 @@
 
 *, *::before, *::after {
   box-sizing: border-box;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 html {
@@ -127,6 +130,20 @@ canvas {
   background: rgba(0, 0, 0, 0.8);
   backdrop-filter: blur(6px);
   z-index: 10000;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 2.4rem;
+  letter-spacing: 0.4rem;
+}
+
+#youwin-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(6px);
+  z-index: 10001;
   display: none;
   align-items: center;
   justify-content: center;
@@ -258,6 +275,7 @@ canvas {
 /* ---------- XY Pad ---------- */
 
 #xy-pad-container {
+  position: relative;
   width: 100%;
   display: flex;
   justify-content: center;
@@ -269,8 +287,41 @@ canvas {
   box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1) inset;
 }
 
+#distance-display {
+  display: none;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  pointer-events: none;
+  text-align: center;
+  color: rgba(244, 244, 244, 0.45);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
+#distance-display.visible {
+  display: flex;
+}
+
+.distance-label {
+  font-size: 0.9rem;
+  opacity: 0.7;
+  letter-spacing: 2px;
+}
+
+#distance-value {
+  font-size: 1.8rem;
+  letter-spacing: 1px;
+}
+
 #xy-pad {
+  display: block;
   width: 100%;
+  aspect-ratio: 1 / 1;
   border: 1px solid #888 !important;
   border-radius: 6px;
   background-image:
@@ -297,30 +348,68 @@ body.display-client #display-root {
   width: 100vw;
   height: 100dvh;
   display: flex;
+  flex-direction: row;
   align-items: center;
   justify-content: center;
   position: relative;
+  padding: 16px;
+  gap: 0;
+}
+
+#display-left {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  height: 100%;
 }
 
 #player-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   grid-template-rows: repeat(4, 1fr);
-  gap: 8px;
-  width: min(90vw, 90dvh);
-  height: min(90vw, 90dvh);
+  gap: 10px;
+  width: min(40vw, 88dvh);
+  height: min(40vw, 88dvh);
   padding: 12px;
+  flex-shrink: 0;
+}
+
+#playground-canvas {
+  flex-shrink: 0;
+  width: min(40vw, 88dvh);
+  height: min(40vw, 88dvh);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 6px;
+  background: #0b0b0d;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1) inset;
+  touch-action: none;
 }
 
 .player-cell {
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 2px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 3px;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
+  position: relative;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.player-cell-gameover {
+  position: absolute;
+  inset: 0;
+  display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.4em;
-  transition: background 0.12s ease, color 0.12s ease;
+  background: rgba(0, 0, 0, 0.82);
+  color: #ff2200;
+  font-size: clamp(6px, 0.95vw, 13px);
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  z-index: 1;
 }
 
 .player-cell.empty {
@@ -328,36 +417,57 @@ body.display-client #display-root {
   border-color: rgba(255, 255, 255, 0.04);
 }
 
-.player-cell-id {
-  font-size: clamp(12px, 3vw, 32px);
+.player-cell-header {
+  font-size: clamp(11px, 1.6vw, 26px);
   font-weight: 700;
   letter-spacing: 0.08em;
+  padding: clamp(2px, 0.4vw, 6px) clamp(4px, 0.6vw, 10px);
+  background: rgba(0, 0, 0, 0.3);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  text-align: center;
 }
 
-.player-cell-status {
-  font-size: clamp(8px, 1.2vw, 14px);
+.player-cell-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-evenly;
+  padding: clamp(2px, 0.35vw, 5px) clamp(4px, 0.6vw, 8px);
+}
+
+.player-param-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.player-param-label {
+  font-size: clamp(5px, 0.75vw, 10px);
   letter-spacing: 0.15em;
+  opacity: 0.55;
   text-transform: uppercase;
-  opacity: 0.75;
+}
+
+.player-param-value {
+  font-size: clamp(6px, 0.9vw, 12px);
+  font-variant-numeric: tabular-nums;
 }
 
 .player-cell-life {
   display: flex;
   flex-direction: row;
   align-items: center;
-  gap: 0.3em;
-  width: 80%;
-  margin-top: 0.3em;
+  gap: 0.25em;
 }
 
 .player-life-symbol {
-  font-size: clamp(8px, 1.2vw, 13px);
+  font-size: clamp(8px, 1.1vw, 14px);
   flex-shrink: 0;
 }
 
 .player-life-bar {
   flex: 1;
-  height: clamp(4px, 0.8vw, 8px);
+  height: clamp(4px, 0.7vw, 8px);
   background: rgba(255, 255, 255, 0.15);
   border: 1px solid rgba(255, 255, 255, 0.25);
   position: relative;
@@ -373,7 +483,7 @@ body.display-client #display-root {
 }
 
 .player-life-value {
-  font-size: clamp(7px, 1vw, 11px);
+  font-size: clamp(7px, 0.9vw, 12px);
   flex-shrink: 0;
   opacity: 0.8;
   font-variant-numeric: tabular-nums;

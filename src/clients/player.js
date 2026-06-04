@@ -112,7 +112,6 @@ async function main($container) {
   const global = await client.stateManager.attach('global');
   const user = await client.stateManager.create('user');
   const control = await client.stateManager.create('control');
-
   user.set({id: index});
   control.set({id: index});
 
@@ -124,10 +123,24 @@ async function main($container) {
   analyser.fftSize = 1024;
   analyser.smoothingTimeConstant = 0.3;
 
-  const padGain = audioContext.createGain();
-  padGain.gain.value = 0;
-  analyser.connect(padGain);
-  padGain.connect(outputNode);
+  analyser.connect(outputNode);
+
+  // Reverb (synthetic impulse response)
+  const reverbConvolver = audioContext.createConvolver();
+  const reverbGain = audioContext.createGain();
+  reverbGain.gain.value = 0.5;
+  const irLength = audioContext.sampleRate * 0.8;
+  const irBuffer = audioContext.createBuffer(2, irLength, audioContext.sampleRate);
+  for (let ch = 0; ch < 2; ch++) {
+    const data = irBuffer.getChannelData(ch);
+    for (let i = 0; i < irLength; i++) {
+      data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / irLength, 2);
+    }
+  }
+  reverbConvolver.buffer = irBuffer;
+  reverbConvolver.connect(reverbGain);
+  reverbGain.connect(outputNode);
+
   const baseColor = '#000000';
 
   const humGain = audioContext.createGain();
@@ -195,8 +208,9 @@ async function main($container) {
       return;
   }
 
-  // Connect the device to the web audio graph
+  // Connect the device to the web audio graph (dry + reverb send)
   device.node.connect(analyser);
+  device.node.connect(reverbConvolver);
 
   const inports = getInports(device);
   console.log("Inports:")
@@ -279,10 +293,7 @@ async function main($container) {
   const goal = global.get('goal');
   console.log('Initial goal:', goal);
   sendMessageToInport(device, 'goal', goal);
-  // Prime RNBO: set a known touch position and start synthesis so feedback
-  // buffers are warm before the first user tap
   sendMessageToInport(device, 'touch', [50, 50]);
-  sendMessageToInport(device, 'start', [1]);
 
   const padState = {
     trialMode: global.get('trial_mode') ?? false,
@@ -293,16 +304,26 @@ async function main($container) {
   // initial preset load
   const initialPreset = user.get('preset') || 0;
   loadPresetAtIndex(device, presets, initialPreset);
-  // Presets embed their own dist_threshold/sharp_threshold values — re-apply globals immediately
+  // Re-apply globals/user params that presets may override
   const _initDist = getParameter(device, "dist_threshold");
   const _initSharp = getParameter(device, "sharp_threshold");
   if (_initDist) _initDist.value = global.get('dist_threshold');
   if (_initSharp) _initSharp.value = global.get('sharp_threshold');
 
+  const _initFbGain = getParameter(device, 'fb_gain');
+  const _initFbTrim = getParameter(device, 'fb_trim');
+  const _initBpQ = getParameter(device, 'bp_q');
+  const _initPhaseQ = getParameter(device, 'phase_q');
+  if (_initFbGain) _initFbGain.value = user.get('fb_gain');
+  if (_initFbTrim) _initFbTrim.value = user.get('fb_trim');
+  if (_initBpQ) _initBpQ.value = user.get('bp_q');
+  if (_initPhaseQ) _initPhaseQ.value = user.get('phase_q');
+
   // Penalty counter state
   let penaltyCounter = 10.0;
   let penaltyInterval = null;
   let setGameoverOverlay = () => {};
+  let setYouWinOverlay = () => {};
 
   function updatePenaltyDisplay() {
     const el = document.getElementById('penalty-counter-value');
@@ -314,17 +335,19 @@ async function main($container) {
 
   function startPenaltyCounter() {
     if (penaltyInterval) return;
+    if (padState.trialMode) return;
     updatePenaltyDisplay();
     penaltyInterval = setInterval(() => {
       penaltyCounter = Math.max(0, +(penaltyCounter - 0.1).toFixed(1));
       updatePenaltyDisplay();
+      user.set({ life: penaltyCounter });
       if (penaltyCounter <= 0) {
         clearInterval(penaltyInterval);
         penaltyInterval = null;
-        user.set({ life: 0 });
         console.log('you loose :(');
         sendMessageToInport(device, 'running', 0);
         setGameoverOverlay(true);
+        setYouWinOverlay(false);
       }
     }, 200);
   }
@@ -342,53 +365,38 @@ async function main($container) {
 
   // Listen for messages from RNBO device
   device.messageEvent.subscribe((ev) => {
-    /* if (ev.tag === "out5") {
-      const zone = ev.payload;
-      console.log(`Received message ${ev.tag}: ${ev.payload}`);
-      user.set({zone: zone});// store in user state
-    }
-    if (ev.tag === "out4") {
-      const style = ev.payload;
-      console.log('Style received:', style);
-      user.set({style: style});
-      control.set({del: style[0]}); // trigger update
-      control.set({phase: style[1]});
-      control.set({bp: style[2]});
-    } */
     if (ev.tag === "out4") {
       if (!isActive) return;
       const harshness = ev.payload;
       if (deviceStartedAt !== null && (performance.now() - deviceStartedAt) < 250) return;
       applyBackgroundMode(harshness, 0);
-      user.set({harsh: harshness});// store in user state
-      /* if (harshness > 0) {
-        const countPenalty = penalty + 1;
-        console.log('Increasing penalty to', countPenalty);
-        global.set({penalty: countPenalty});
-        //applyBackgroundMode(harshness, countPenalty);
-      } else if (harshness == 0 && penalty > 1) {
-        const countPenalty = penalty - 1;
-        global.set({penalty: countPenalty});
-        //applyBackgroundMode(harshness, countPenalty);
-      } else if (harshness == 0 && penalty <= 1) {
-        const countPenalty = 0;
-        global.set({penalty: countPenalty});
-        //applyBackgroundMode(harshness, countPenalty);
-      } */
+      user.set({harsh: harshness});
     }
     if (ev.tag === "out2") {
       const sharpness = ev.payload;
       const el = document.getElementById('sharpness-value');
       if (el) el.textContent = typeof sharpness === 'number' ? sharpness.toFixed(2) : sharpness;
+      control.set({ sharpness: sharpness });
     }
     if (ev.tag === "out3") {
       // loudness — received but not displayed
+    }
+    if (ev.tag === "out5") {
+      const distance = ev.payload;
+      const d = Math.max(0, Math.min(1, distance));
+      if (padState.trialMode) {
+        const el = document.getElementById('distance-value');
+        if (el) el.textContent = d.toFixed(2);
+      }
+      reverbGain.gain.setTargetAtTime(0.33 + 0.42 * d, audioContext.currentTime, 0.05);
     }
   });
 
   global.onUpdate(updates => {
     if ('trial_mode' in updates) {
       padState.trialMode = updates['trial_mode'];
+      const distDisplay = document.getElementById('distance-display');
+      if (distDisplay) distDisplay.classList.toggle('visible', padState.trialMode);
       redrawPad();
     }
     if ('goal' in updates) {
@@ -401,20 +409,20 @@ async function main($container) {
     if ('running' in updates) {
       const isRunning = updates['running'];
       const enterOverlay = document.getElementById("enter-overlay");
-      const gameOverOverlay = document.getElementById('gameover-overlay');
-      const startTime = sync.getLocalTime() + 0.5; // 1 second in the future
+      const startTime = sync.getLocalTime() + 0.5;
 
       if (isRunning) {
         user.set({ life: 10 });
         stopPenaltyCounter(true);
-        console.log('you live!');
-        enterOverlay.style.display = "none";
-        gameOverOverlay.style.display = "none";
+        if (enterOverlay) enterOverlay.style.display = "none";
+        setGameoverOverlay(false);
+        setYouWinOverlay(false);
       } else {
         stopPenaltyCounter(false);
-        gameOverOverlay.style.display = "flex";
+        if (enterOverlay) enterOverlay.style.display = "flex";
+        setGameoverOverlay(false);
+        setYouWinOverlay(false);
       }
-      console.log('Running state updated:', isRunning);
       playerLoop(startTime, isRunning);
       sendMessageToInport(device, 'running', isRunning ? [1] : [0]);
     }
@@ -433,7 +441,18 @@ async function main($container) {
   user.onUpdate(updates => {
     if ('life' in updates) {
       const isAlive = updates['life'] > 0;
-      setGameoverOverlay(!isAlive);
+      if (!isAlive) {
+        setGameoverOverlay(true);
+        setYouWinOverlay(false);
+      } else {
+        setGameoverOverlay(false);
+      }
+    }
+    if ('winner' in updates) {
+      if (updates['winner']) {
+        setYouWinOverlay(true);
+        setGameoverOverlay(false);
+      }
     }
     if ('proximity' in updates) {
       sendMessageToInport(device, 'proximity', updates['proximity']);
@@ -455,11 +474,35 @@ async function main($container) {
     if ('preset' in updates) {
       const index = updates['preset'];
       loadPresetAtIndex(device, presets, index);
-      // Re-apply global thresholds overridden by preset values
+      // Re-apply params that presets may override
       const _distParam = getParameter(device, "dist_threshold");
       const _sharpParam = getParameter(device, "sharp_threshold");
       if (_distParam) _distParam.value = global.get('dist_threshold');
       if (_sharpParam) _sharpParam.value = global.get('sharp_threshold');
+      const _fbGainP = getParameter(device, 'fb_gain');
+      const _fbTrimP = getParameter(device, 'fb_trim');
+      const _bpQP = getParameter(device, 'bp_q');
+      const _phaseQP = getParameter(device, 'phase_q');
+      if (_fbGainP) _fbGainP.value = user.get('fb_gain');
+      if (_fbTrimP) _fbTrimP.value = user.get('fb_trim');
+      if (_bpQP) _bpQP.value = user.get('bp_q');
+      if (_phaseQP) _phaseQP.value = user.get('phase_q');
+    }
+    if ('fb_gain' in updates) {
+      const p = getParameter(device, 'fb_gain');
+      if (p) p.value = updates['fb_gain'];
+    }
+    if ('fb_trim' in updates) {
+      const p = getParameter(device, 'fb_trim');
+      if (p) p.value = updates['fb_trim'];
+    }
+    if ('bp_q' in updates) {
+      const p = getParameter(device, 'bp_q');
+      if (p) p.value = updates['bp_q'];
+    }
+    if ('phase_q' in updates) {
+      const p = getParameter(device, 'phase_q');
+      if (p) p.value = updates['phase_q'];
     }
   });
 
@@ -468,11 +511,19 @@ async function main($container) {
     if ('collision' in updates && updates['collision'] === 1 && presets.length > 0) {
       const randIndex = Math.floor(Math.random() * presets.length);
       loadPresetAtIndex(device, presets, randIndex);
-      // Re-apply global thresholds overridden by preset values
+      // Re-apply params that presets may override
       const _distParam = getParameter(device, "dist_threshold");
       const _sharpParam = getParameter(device, "sharp_threshold");
       if (_distParam) _distParam.value = global.get('dist_threshold');
       if (_sharpParam) _sharpParam.value = global.get('sharp_threshold');
+      const _fbGainC = getParameter(device, 'fb_gain');
+      const _fbTrimC = getParameter(device, 'fb_trim');
+      const _bpQC = getParameter(device, 'bp_q');
+      const _phaseQC = getParameter(device, 'phase_q');
+      if (_fbGainC) _fbGainC.value = user.get('fb_gain');
+      if (_fbTrimC) _fbTrimC.value = user.get('fb_trim');
+      if (_bpQC) _bpQC.value = user.get('bp_q');
+      if (_phaseQC) _phaseQC.value = user.get('phase_q');
       user.set({ preset: randIndex });
     }
   });
@@ -487,13 +538,26 @@ async function main($container) {
 
         <div id="enter-overlay">
             <div id="enter-content">
-              <div id="enter-text"></div>
-              <button id="enter-button" type="button"> >>> </button>
+              <div id="enter-text">
+                ${[
+                  'Welcome to B3-H4RSH',
+                  'Tap and hold the pad to generate sound. Drag to shape it.',
+                  'Push the sound toward the target to make it harsh — and drain your opponents\' life points.',
+                  'Turn up the volume and brightness on your device.',
+                  'Lock your device orientation to portrait.',
+                  'Stay alive. The last player still sounding wins.',
+                  'Enjoy!',
+                ].map(line => html`<p>${line}</p>`)}
+              </div>
             </div>
         </div>
 
         <div id="gameover-overlay">
           <div id="gameover-content">G4M3 0V3R</div>
+        </div>
+
+        <div id="youwin-overlay">
+          <div id="youwin-content">Y0U W1N!</div>
         </div>
 
         <div id="oscilloscope-container">
@@ -513,6 +577,10 @@ async function main($container) {
         </div>
 
         <div id="xy-pad-container">
+          <div id="distance-display">
+            <div class="distance-label">DISTANCE</div>
+            <div id="distance-value">0.00</div>
+          </div>
           <canvas id="xy-pad" width="320" height="320"></canvas>
         </div>
 
@@ -526,8 +594,18 @@ async function main($container) {
       const overlay = document.getElementById('gameover-overlay');
       if (overlay) overlay.style.display = visible ? 'flex' : 'none';
     };
+    setYouWinOverlay = (visible) => {
+      const overlay = document.getElementById('youwin-overlay');
+      if (overlay) overlay.style.display = visible ? 'flex' : 'none';
+    };
+    // Initialize overlay states based on current running value
+    const _enterOverlay = document.getElementById('enter-overlay');
+    if (_enterOverlay) _enterOverlay.style.display = global.get('running') ? 'none' : 'flex';
     setGameoverOverlay(false);
-    redrawPad = setupUI(device, control, user, padState, audioContext, padGain,
+    setYouWinOverlay(false);
+    const distDisplay = document.getElementById('distance-display');
+    if (distDisplay) distDisplay.classList.toggle('visible', padState.trialMode);
+    redrawPad = setupUI(device, control, user, padState, audioContext,
       () => { isActive = true; deviceStartedAt = performance.now(); },
       () => { isActive = false; }
     ).redraw;
@@ -675,7 +753,7 @@ function startOscilloscope(analyser) {
   draw();
 }
 
-function setupUI(device, control, user, padState, audioContext, padGain, onStart, onStop) {
+function setupUI(device, control, user, padState, audioContext, onStart, onStop) {
     // Get all UI elements we need
     const canvas = document.getElementById('xy-pad');
     const ctx = canvas.getContext('2d');
@@ -786,10 +864,8 @@ function setupUI(device, control, user, padState, audioContext, padGain, onStart
             );
             if (touchDebug) touchDebug.textContent = `[${touchX}, ${touchY}]`;
             device.scheduleEvent(messageEvent);
+            sendMessageToInport(device, 'start', [1]);
             onStart();
-            padGain.gain.cancelScheduledValues(audioContext.currentTime);
-            padGain.gain.setValueAtTime(padGain.gain.value, audioContext.currentTime);
-            padGain.gain.linearRampToValueAtTime(1, audioContext.currentTime + 0.15);
             if (control) control.set({active: 1});
         }
     });
@@ -828,10 +904,8 @@ function setupUI(device, control, user, padState, audioContext, padGain, onStart
         if (e.pointerId === activePointerId) {
             dragging = false;
             activePointerId = null;
+            sendMessageToInport(device, 'start', [0]);
             onStop();
-            padGain.gain.cancelScheduledValues(audioContext.currentTime);
-            padGain.gain.setValueAtTime(padGain.gain.value, audioContext.currentTime);
-            padGain.gain.linearRampToValueAtTime(0, audioContext.currentTime + 0.08);
             user.set({ harsh: 0 });
             if (control) control.set({active: 0});
         }
@@ -841,10 +915,8 @@ function setupUI(device, control, user, padState, audioContext, padGain, onStart
         if (e.pointerId === activePointerId) {
             dragging = false;
             activePointerId = null;
+            sendMessageToInport(device, 'start', [0]);
             onStop();
-            padGain.gain.cancelScheduledValues(audioContext.currentTime);
-            padGain.gain.setValueAtTime(padGain.gain.value, audioContext.currentTime);
-            padGain.gain.linearRampToValueAtTime(0, audioContext.currentTime + 0.08);
             if (control) control.set({active: 0});
         }
     });
@@ -863,57 +935,6 @@ function setupUI(device, control, user, padState, audioContext, padGain, onStart
         }
       });
     } */
-
-    // Overlay text can be advanced as soon as UI is rendered (DOMContentLoaded may already have fired)
-    const enterButton = document.getElementById("enter-button");
-    const enterText = document.getElementById("enter-text");
-    const enterTexts = [
-      [
-        'Welcome to B3-H4RSH!',
-        'This a noise game, you have to harsh. ', 
-        'The goal is to seek the harshest sound possible.',
-        'Be careful: if another player harshes, you lose life points.',
-        'Stay alive and be the last player still sounding to win.',
-      ],
-      [
-        'Tap and hold the pad to generate the sound.',
-        'Every time you tap, a new sound can come up.',
-        'Drag around and move the slider to shape the noise',
-        'Find the best point to harsh!',
-      ],
-      [
-        'Turn up the volume on your device.',
-        'Turn up the brightness of your screen.',
-        'Wait for the game to start.',
-        'Good luck and enjoy!',
-      ],
-    ];
-    let enterTextIndex = 0;
-
-    const renderEnterText = (index) => {
-      if (!enterText) return;
-      const lines = enterTexts[index] || [];
-      const nodes = lines.map((line) => {
-        const p = document.createElement('p');
-        const em = document.createElement('em');
-        em.textContent = line;
-        p.appendChild(em);
-        return p;
-      });
-      enterText.replaceChildren(...nodes);
-      if (enterButton) {
-        enterButton.style.display = index < enterTexts.length - 1 ? 'flex' : 'none';
-      }
-    };
-    if (enterButton && enterText) {
-      renderEnterText(enterTextIndex);
-      const enterOverlay = document.getElementById('enter-overlay');
-      enterButton.onclick = () => {
-        //enterTextIndex = Math.min(enterTextIndex + 1, enterTexts.length - 1);
-        //renderEnterText(enterTextIndex);
-        enterOverlay.style.display = "none";
-      };
-    }
 
     return { redraw: drawPad };
 }

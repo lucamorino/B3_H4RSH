@@ -175,6 +175,16 @@ function evaluatePenalties() {
   });
 } 
 
+function checkWinner() {
+  if (!global.get('running')) return;
+  const states = Array.from(userStates.values());
+  if (states.length < 2) return;
+  const alive = states.filter(s => Number(s.get('life') ?? 10) > 0);
+  if (alive.length !== 1) return;
+  const winner = alive[0];
+  if (!winner.get('winner')) winner.set({ winner: true });
+}
+
 function evaluateCollisions() {
   const collisionDistance = Number(global.get('collision_distance') ?? 3);
   const safeCollisionDistance = Number.isFinite(collisionDistance) ? collisionDistance : 3;
@@ -314,13 +324,12 @@ userCollection.onDetach((state) => {
   userStates.delete(state.id);
   evaluatePenalties();
   evaluateCollisions();
-  //evaluateEndStates();
+  checkWinner();
 });
 
 userCollection.onChange(() => {
   evaluatePenalties();
-  //evaluateEndStates();
-  //writer.write(userStates);
+  checkWinner();
 });
 
 global.onUpdate(updates => {
@@ -330,6 +339,7 @@ global.onUpdate(updates => {
     console.log(triggerTime);
     
     if (running) {
+      userStates.forEach(s => { if (s.get('winner')) s.set({ winner: false }); });
       global.set({syncTriggerTime: triggerTime});
       console.log(`Running state ON at syncTime ${triggerTime}`);
     }

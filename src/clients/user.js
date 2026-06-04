@@ -63,4 +63,32 @@ export default {
       min: 0,
       max: 20,
     },
+    winner: {
+      type: 'boolean',
+      default: false,
+    },
+    fb_gain: {
+      type: 'float',
+      default: 0.36,
+      min: 0.001,
+      max: 3.99,
+    },
+    fb_trim: {
+      type: 'float',
+      default: 0.36,
+      min: 0.001,
+      max: 3.99,
+    },
+    bp_q: {
+      type: 'float',
+      default: 0.6,
+      min: 0.001,
+      max: 0.99,
+    },
+    phase_q: {
+      type: 'float',
+      default: 0.6,
+      min: 0.001,
+      max: 0.99,
+    },
   };

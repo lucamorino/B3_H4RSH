@@ -53,15 +53,20 @@ const serializeUserState = (state) => ({
   proximity: state.get('proximity'),
   periphery: state.get('periphery'),
   preset: state.get('preset'),
+  fb_gain: state.get('fb_gain'),
+  fb_trim: state.get('fb_trim'),
+  bp_q: state.get('bp_q'),
+  phase_q: state.get('phase_q'),
 });
 
 const serializeControlState = (state) => ({
   id: state.get('id'),
   X: state.get('X'),
   Y: state.get('Y'),
-  Z: state.get('Z'),
+  //Z: state.get('Z'),
   active: state.get('active'),
   collision: state.get('collision'),
+  sharpness: state.get('sharpness'),
 });
 
 const emitUserParameters = () => {
@@ -147,7 +152,8 @@ function getLogSample(type = 'sample', extras = {}) {
         active: controlState?.get('active') ?? null,
         padX: controlState?.get('X') ?? null,
         padY: controlState?.get('Y') ?? null,
-        slider: controlState?.get('Z') ?? null,
+       //slider: controlState?.get('Z') ?? null,
+        sharpness: controlState?.get('sharpness') ?? null,
         harsh: userState.get('harsh'),
         penalty: userState.get('penalty'),
       };
@@ -214,5 +220,19 @@ Max.addHandler('periphery_offset', (offset) => global.set({ periphery_offset: of
 Max.addHandler('sharp_threshold', (threshold) => global.set({ sharp_threshold: threshold }));
 Max.addHandler('dist_threshold', (threshold) => global.set({ dist_threshold: threshold }));
 Max.addHandler('trial_mode', (mode) => global.set({ trial_mode: Boolean(mode) }));
+
+function setUserParam(userId, key, value) {
+  if (userId === -1) {
+    userCollection.forEach((state) => state.set({ [key]: value }));
+  } else {
+    const state = Array.from(userStates.values()).find((s) => s.get('id') === userId);
+    state?.set({ [key]: value });
+  }
+}
+
+Max.addHandler('fb_gain', (userId, value) => setUserParam(userId, 'fb_gain', value));
+Max.addHandler('fb_trim', (userId, value) => setUserParam(userId, 'fb_trim', value));
+Max.addHandler('bp_q', (userId, value) => setUserParam(userId, 'bp_q', value));
+Max.addHandler('phase_q', (userId, value) => setUserParam(userId, 'phase_q', value));
 
   
